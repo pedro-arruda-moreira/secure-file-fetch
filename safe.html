@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure File Fetch</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Inter, Arial, sans-serif;
+    }
+
+    body {
+      background: #0f1117;
+      color: #e6e6e6;
+      margin: 0;
+      padding: 32px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #9aa4b2;
+      margin-bottom: 12px;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      background: #181c24;
+      border: 1px solid #2b3240;
+      color: #fff;
+      border-radius: 12px;
+      padding: 14px;
+      resize: vertical;
+      outline: none;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: #4d8dff;
+    }
+
+    textarea {
+      min-height: 180px;
+    }
+
+    .label {
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #c8d1dc;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 10px;
+      background: #161b22;
+      border: 1px solid #2b3240;
+      color: #9cc2ff;
+      white-space: pre-wrap;
+    }
+
+    .spinner {
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    code {
+      background: #1d2330;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div>
+      <h1>🔐 Secure File Fetch</h1>
+    </div>
+
+    <div>
+      <div class="label">First Name</div>
+      <input id="firstname" type="text" placeholder="Your first name here..." autocomplete="off" />
+    </div>
+
+    <div>
+      <div class="label">Birth Year</div>
+      <input id="year" type="number" placeholder="Your birth year here..." autocomplete="off" />
+    </div>
+
+    <div>
+      <div class="label">Password</div>
+      <input id="password" type="password" placeholder="Your password here..." autocomplete="off" />
+    </div>
+
+    <div class="status" id="status">
+      Waiting for password...
+    </div>
+
+    <div>
+      <div class="label">Messages</div>
+      <textarea id="messages" readonly></textarea>
+    </div>
+
+    <div>
+      <div class="label">Errors</div>
+      <textarea id="errors" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+
+    const iterations = 16777216;
+    const keyBytes = 64;
+    const nameInput = document.getElementById("firstname");
+    const yearInput = document.getElementById("year");
+    const passwordInput = document.getElementById("password");
+    const messages = document.getElementById("messages");
+    const errors = document.getElementById("errors");
+    const status = document.getElementById("status");
+
+    let currentRequestId = 0;
+
+    function logMessage(msg) {
+      messages.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function logError(msg) {
+      errors.value += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+      errors.scrollTop = errors.scrollHeight;
+    }
+
+    async function deriveKey(password) {
+      const encoder = new TextEncoder();
+
+      const salt = encoder.encode(`${nameInput.value.toLowerCase()}/${yearInput.value}`);
+
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        { name: "PBKDF2" },
+        false,
+        ["deriveBits"]
+      );
+
+      const derivedBits = await crypto.subtle.deriveBits(
+        {
+          name: "PBKDF2",
+          salt,
+          iterations: iterations,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        keyBytes * 8
+      );
+
+      const bytes = new Uint8Array(derivedBits);
+
+      // Base64 URL-safe
+      const base64 = btoa(String.fromCharCode(...bytes));
+
+      return base64
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+    }
+
+    async function fetchSecureFile(password, requestId) {
+      try {
+        status.innerHTML = '<span class="spinner">🌀</span> Deriving PBKDF2 key...';
+
+        logMessage(`Starting PBKDF2 deriving (${iterations} iterations)...`);
+
+        const key = await deriveKey(password);
+
+        if (requestId !== currentRequestId) {
+          return;
+        }
+
+        logMessage(`Derived key: ${key}`);
+
+        const url = `files/${key}`;
+
+        status.innerHTML = `Fetching file: ${url}`;
+
+        logMessage(`Trying to fetch file at: ${url}`);
+
+        const metadataFile = await fetch(`${url}/metadata.json`, {
+          method: "GET",
+          cache: "no-store"
+        });
+
+        if (requestId !== currentRequestId) {
+          return;
+        }
+
+        if (!metadataFile.ok) {
+          throw new Error(
+            `File not found or access denied (${response.status})`
+          );
+        }
+
+        const metadata = await metadataFile.json();
+        const fileName = metadata.name;
+
+        const response = await fetch(`${url}/file`, {
+          method: "GET",
+          cache: "no-store"
+        });
+
+        const blob = await response.blob();
+
+        status.textContent = "File fetched succesfully.";
+
+        logMessage("File fetched succesfully.");
+        logMessage(`File size: ${blob.size} bytes`);
+
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          const dataUrl = reader.result;
+
+          const oldLink = document.getElementById("download-link");
+
+          if (oldLink) {
+            oldLink.remove();
+          }
+
+          const link = document.createElement("a");
+
+          link.id = "download-link";
+          link.href = dataUrl;
+          link.download = fileName;
+          link.textContent = "⬇️ Download do arquivo";
+
+          link.style.display = "inline-block";
+          link.style.marginTop = "12px";
+          link.style.padding = "12px 16px";
+          link.style.background = "#2563eb";
+          link.style.color = "white";
+          link.style.textDecoration = "none";
+          link.style.borderRadius = "10px";
+
+          status.appendChild(document.createElement("br"));
+          status.appendChild(link);
+        };
+
+        reader.readAsDataURL(blob);
+
+      } catch (err) {
+        status.textContent = "Failure while getting file.";
+
+        logError(err?.stack || err?.message || String(err));
+      }
+    }
+
+    let debounceTimer = null;
+
+    passwordInput.addEventListener("input", () => {
+      const password = passwordInput.value.trim();
+
+      currentRequestId++;
+
+      clearTimeout(debounceTimer);
+
+      if (!password) {
+        status.textContent = "Waiting for password...";
+        return;
+      }
+
+      debounceTimer = setTimeout(() => {
+        fetchSecureFile(password, currentRequestId);
+      }, 1200);
+    });
+  </script>
+</body>
+
+</html>
