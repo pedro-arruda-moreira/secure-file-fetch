@@ -221,7 +221,7 @@
 
         if (!metadataFile.ok) {
           throw new Error(
-            `File not found or access denied (${response.status})`
+            `File not found or access denied (${metadataFile.status})`
           );
         }
 
