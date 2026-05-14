@@ -1,4 +1,4 @@
-# safe-file-fetch
+# secure-file-fetch
 Access control on public buckets!
 
 ## What is it?
