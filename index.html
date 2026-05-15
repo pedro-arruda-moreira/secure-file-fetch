@@ -133,9 +133,10 @@
   </div>
 
   <script>
+    const difficulty = 26;
 
-    const iterations = 16777216;
-    const keyBytes = 64;
+    const iterations = Math.pow(2, difficulty);
+    const keyBytes = 80;
     const nameInput = document.getElementById("firstname");
     const yearInput = document.getElementById("year");
     const passwordInput = document.getElementById("password");
@@ -228,49 +229,33 @@
         const metadata = await metadataFile.json();
         const fileName = metadata.name;
 
-        const response = await fetch(`${url}/file`, {
-          method: "GET",
-          cache: "no-store"
-        });
+        status.textContent = "File metadata fetched succesfully.";
 
-        const blob = await response.blob();
+        logMessage("File metadata fetched succesfully.");
 
-        status.textContent = "File fetched succesfully.";
+        const oldLink = document.getElementById("download-link");
 
-        logMessage("File fetched succesfully.");
-        logMessage(`File size: ${blob.size} bytes`);
+        if (oldLink) {
+          oldLink.remove();
+        }
 
-        const reader = new FileReader();
+        const link = document.createElement("a");
 
-        reader.onload = () => {
-          const dataUrl = reader.result;
+        link.id = "download-link";
+        link.href = `${url}/file`;
+        link.download = fileName;
+        link.textContent = "⬇️ Download file";
 
-          const oldLink = document.getElementById("download-link");
+        link.style.display = "inline-block";
+        link.style.marginTop = "12px";
+        link.style.padding = "12px 16px";
+        link.style.background = "#2563eb";
+        link.style.color = "white";
+        link.style.textDecoration = "none";
+        link.style.borderRadius = "10px";
 
-          if (oldLink) {
-            oldLink.remove();
-          }
-
-          const link = document.createElement("a");
-
-          link.id = "download-link";
-          link.href = dataUrl;
-          link.download = fileName;
-          link.textContent = "⬇️ Download file";
-
-          link.style.display = "inline-block";
-          link.style.marginTop = "12px";
-          link.style.padding = "12px 16px";
-          link.style.background = "#2563eb";
-          link.style.color = "white";
-          link.style.textDecoration = "none";
-          link.style.borderRadius = "10px";
-
-          status.appendChild(document.createElement("br"));
-          status.appendChild(link);
-        };
-
-        reader.readAsDataURL(blob);
+        status.appendChild(document.createElement("br"));
+        status.appendChild(link);
 
       } catch (err) {
         status.textContent = "Failure while getting file.";
