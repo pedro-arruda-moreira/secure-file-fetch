@@ -267,6 +267,10 @@
     let debounceTimer = null;
 
     passwordInput.addEventListener("input", () => {
+      if (!window.isSecureContext) {
+        alert('not secure. not running');
+        return;
+      }
       const password = passwordInput.value.trim();
 
       currentRequestId++;
@@ -280,7 +284,7 @@
 
       debounceTimer = setTimeout(() => {
         fetchSecureFile(password, currentRequestId);
-      }, 1200);
+      }, 750);
     });
   </script>
 </body>
